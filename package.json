@@ -1,0 +1,25 @@
+{
+  "name": "chill-night-food-point",
+  "version": "1.0.0",
+  "description": "Chill Night Food Point — Responsive Fast-Food Order Management & Live Customer Tracking Web Application",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm install --prefix server && npm install --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "node server/src/server.js",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "test": "npm test --prefix server"
+  },
+  "keywords": [
+    "pos",
+    "restaurant-management",
+    "fast-food",
+    "react",
+    "express",
+    "sqlite",
+    "typescript"
+  ],
+  "author": "Chill Night Food Point",
+  "license": "ISC"
+}

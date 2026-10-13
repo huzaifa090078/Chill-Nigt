@@ -1,22 +1,30 @@
 # Node dependencies
 node_modules/
+client/node_modules/
+server/node_modules/
+web-tracker/node_modules/
+backend/node_modules/
 npm-debug.log*
 
-# SQLite database files & WAL journals
+# Production build artifacts
+client/dist/
+dist/
+
+# SQLite databases & WAL journals
 *.db
 *.db-shm
 *.db-wal
 
-# Environment secrets
+# Environment variables & secrets
 .env
+.env.local
+.env.production
 
-# Web build cache (keep source clean)
-web-tracker/node_modules/
-
-# Android Gradle build cache & local SDK path
+# Android build cache & binaries
 android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
 .idea/
 *.iml
+*.apk

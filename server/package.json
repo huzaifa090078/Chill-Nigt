@@ -1,0 +1,17 @@
+{
+  "name": "chill-night-server",
+  "version": "1.0.0",
+  "description": "Chill Night Food Point authoritative backend & database engine",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/api.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
