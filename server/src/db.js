@@ -2,7 +2,19 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'chill_night.db');
+let defaultDbPath = path.join(__dirname, '..', 'chill_night.db');
+if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const tmpDbPath = path.join('/tmp', 'chill_night.db');
+  if (!fs.existsSync(tmpDbPath) && fs.existsSync(defaultDbPath)) {
+    try {
+      fs.copyFileSync(defaultDbPath, tmpDbPath);
+    } catch (e) {
+      console.warn('Could not copy initial db to /tmp:', e);
+    }
+  }
+  defaultDbPath = tmpDbPath;
+}
+const dbPath = process.env.DB_PATH || defaultDbPath;
 const db = new DatabaseSync(dbPath);
 
 // Enable WAL mode and foreign keys for high reliability and integrity

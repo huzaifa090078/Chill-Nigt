@@ -11,6 +11,14 @@
     "dev:client": "npm run dev --prefix client",
     "test": "npm test --prefix server"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
   "keywords": [
     "pos",
     "restaurant-management",
