@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, formatOrderNumber } = require('../db');
 const { addTrackingClient } = require('../events');
 
 const router = express.Router();
@@ -33,12 +33,14 @@ router.get('/:token', (req, res) => {
 
   const owner = db.prepare('SELECT restaurant_name, phone, address FROM owners LIMIT 1').get() || {
     restaurant_name: 'Chill Night Food Point',
-    phone: '+92 300 7654321',
+    phone: '0329 1314400',
     address: 'Food Street, Sector F-10, Islamabad',
   };
 
   res.json({
     orderNumber: order.order_number,
+    orderCode: formatOrderNumber(order.order_number),
+    orderNumberFormatted: formatOrderNumber(order.order_number),
     trackingToken: order.tracking_token,
     customerName: order.customer_name,
     customerPhoneMasked: maskPhoneNumber(order.customer_phone),

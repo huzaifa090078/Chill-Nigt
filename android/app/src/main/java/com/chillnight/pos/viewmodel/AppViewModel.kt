@@ -17,8 +17,8 @@ import java.util.UUID
 
 class AppViewModel : ViewModel() {
 
-    // Auth State
-    private val _isLoggedIn = MutableStateFlow(false)
+    // Auth State (Direct App Access without Login requirement)
+    private val _isLoggedIn = MutableStateFlow(true)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     private val _ownerInfo = MutableStateFlow<OwnerInfo?>(null)
@@ -448,12 +448,25 @@ class AppViewModel : ViewModel() {
     // Direct WhatsApp Share Action
     fun shareOrderOnWhatsApp(context: Context, order: Order) {
         try {
-            val phone = order.customerPhone.replace("[^0-9+]".toRegex(), "")
+            val orderType = if (order.orderType == "DELIVERY") "Home Delivery 🛵" else "Takeaway 🛍️"
+            val deliveryOrPickupLabel = if (order.orderType == "DELIVERY") "Delivery" else "Pickup"
+            val deliveryFeeLine = if (order.orderType == "DELIVERY") "🛵 Delivery Fee: Rs. ${order.deliveryFee.toInt()}\n" else ""
             val message = order.whatsappText ?: (
-                "*Assalam-o-Alaikum ${order.customerName}!* 🍔\n" +
-                "Thank you for ordering from *Chill Night Food Point*.\n" +
-                "Your Order #${order.orderNumber} is ${order.status}.\n" +
-                "Track live here: ${order.trackingUrl}"
+                "Assalam-o-Alaikum *${order.customerName}!* 🍔\n" +
+                "Thank you for ordering from *Chill Night Food Point*.\n\n" +
+                "━━━━━━━━━━━━━━━━━━━━\n" +
+                "📋 *ORDER #${order.orderNumber}* ($orderType)\n" +
+                "━━━━━━━━━━━━━━━━━━━━\n\n" +
+                deliveryFeeLine +
+                "💰 *Total Bill: Rs. ${order.totalAmount.toInt()}*\n" +
+                "💳 Payment: *${order.paymentStatus}* (${order.paymentMethod})\n" +
+                "⏱️ Estimated $deliveryOrPickupLabel Time: *${order.estimatedReadyAt}*\n\n" +
+                "━━━━━━━━━━━━━━━━━━━━\n" +
+                "📍 *LIVE ORDER TRACKING:*\n" +
+                "Tap the link below to track your order in real time:\n" +
+                "${order.trackingUrl}\n" +
+                "━━━━━━━━━━━━━━━━━━━━\n\n" +
+                "_Chill Night Food Point — Fresh, Hot & Crispy!_"
             )
 
             val encodedMsg = URLEncoder.encode(message, "UTF-8")

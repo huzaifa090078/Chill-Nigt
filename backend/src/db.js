@@ -103,7 +103,7 @@ function initDatabase() {
       'admin',
       hash,
       'Chill Night Food Point',
-      '+92 300 7654321',
+      '0329 1314400',
       'Food Street, Sector F-10, Islamabad',
       new Date().toISOString()
     );
@@ -156,6 +156,14 @@ function initDatabase() {
   }
 }
 
+const ORDER_PREFIX = 'CNFP';
+
+function formatOrderNumber(orderNumber) {
+  if (!orderNumber && orderNumber !== 0) return '';
+  const numStr = String(orderNumber).replace(/^#?CNFP?-?/i, '');
+  return `${ORDER_PREFIX}-${numStr}`;
+}
+
 // Function to allocate the next sequential order number
 function getNextOrderNumber() {
   const result = db.prepare('SELECT MAX(order_number) as maxNum FROM orders').get();
@@ -165,5 +173,7 @@ function getNextOrderNumber() {
 module.exports = {
   db,
   initDatabase,
+  ORDER_PREFIX,
+  formatOrderNumber,
   getNextOrderNumber,
 };

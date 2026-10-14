@@ -54,6 +54,8 @@ export interface OrderStatusHistory {
 export interface Order {
   id: string;
   order_number: number;
+  order_code?: string;
+  order_number_formatted?: string;
   tracking_token: string;
   customer_name: string;
   customer_phone: string;
@@ -127,6 +129,8 @@ export interface CreateOrderPayload {
 
 export interface CustomerTrackingResponse {
   orderNumber: number;
+  orderCode?: string;
+  orderNumberFormatted?: string;
   trackingToken: string;
   customerName: string;
   customerPhoneMasked: string;
@@ -163,6 +167,61 @@ export interface CustomerTrackingResponse {
   restaurant: {
     name: string;
     phone: string;
+    phoneFormatted?: string;
+    phoneDial?: string;
     address: string;
   };
 }
+
+export interface ShopSettings {
+  shop_name: string;
+  shop_phone: string;
+  alt_phone?: string;
+  address: string;
+  city: string;
+  currency: string;
+  opening_time?: string;
+  closing_time?: string;
+  default_prep_time: string;
+  default_delivery_time: string;
+  default_delivery_fee: string;
+  min_order_amount?: string;
+  default_order_type: OrderType;
+  default_order_filter: string;
+  confirm_destructive_actions: string;
+  order_alert_sound: string;
+  last_backup_time?: string;
+  backup_reminder_days?: string;
+}
+
+export interface BackupMetadata {
+  categoriesCount: number;
+  menuItemsCount: number;
+  ordersCount: number;
+  orderItemsCount: number;
+  statusHistoryCount: number;
+}
+
+export interface BackupPayload {
+  app: string;
+  version: string;
+  exportedAt: string;
+  metadata: BackupMetadata;
+  data: {
+    settings: ShopSettings;
+    categories: Category[];
+    menu_items: MenuItem[];
+    orders: Order[];
+    order_items: unknown[];
+    order_status_history: unknown[];
+  };
+}
+
+export const ORDER_PREFIX = 'CNFP';
+
+export function formatOrderNumber(orderNumber: number | string | undefined | null): string {
+  if (!orderNumber && orderNumber !== 0) return '';
+  const clean = String(orderNumber).replace(/^#?CNFP?-?/i, '');
+  return `${ORDER_PREFIX}-${clean}`;
+}
+

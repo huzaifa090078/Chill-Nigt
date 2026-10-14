@@ -8,6 +8,8 @@ import {
   CustomerTrackingResponse,
   OrderStatus,
   PaymentMethod,
+  ShopSettings,
+  BackupPayload,
 } from '../types';
 
 const API_BASE = '/api';
@@ -162,3 +164,68 @@ export async function getTrackingDetails(token: string): Promise<CustomerTrackin
   const res = await fetch(`${API_BASE}/track/${token}`);
   return handleResponse<CustomerTrackingResponse>(res);
 }
+
+// 6. Settings, Backup & Data Management
+export async function getShopSettings(): Promise<ShopSettings> {
+  const res = await fetch(`${API_BASE}/settings`);
+  return handleResponse<ShopSettings>(res);
+}
+
+export async function updateShopSettings(data: Partial<ShopSettings>): Promise<ShopSettings> {
+  const res = await fetch(`${API_BASE}/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ShopSettings>(res);
+}
+
+export async function exportBackupData(): Promise<BackupPayload> {
+  const res = await fetch(`${API_BASE}/settings/backup/export`);
+  return handleResponse<BackupPayload>(res);
+}
+
+export async function importBackupData(backupData: unknown): Promise<{
+  success: boolean;
+  message: string;
+  restored: { categoriesCount: number; menuItemsCount: number; ordersCount: number };
+}> {
+  const res = await fetch(`${API_BASE}/settings/backup/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backup: backupData }),
+  });
+  return handleResponse<{
+    success: boolean;
+    message: string;
+    restored: { categoriesCount: number; menuItemsCount: number; ordersCount: number };
+  }>(res);
+}
+
+export async function resetOrdersData(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/settings/reset/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmation: true }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(res);
+}
+
+export async function resetMenuData(reseedDefaults = false): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/settings/reset/menu`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmation: true, reseedDefaults }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(res);
+}
+
+export async function resetAllAppData(confirmationText: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/settings/reset/all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmationText }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(res);
+}
+

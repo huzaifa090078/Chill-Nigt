@@ -38,16 +38,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-
-                    if (!isLoggedIn) {
-                        LoginScreen(
-                            viewModel = viewModel,
-                            onLoginSuccess = { /* state updates automatically */ }
-                        )
-                    } else {
-                        MainAppContent(viewModel = viewModel)
-                    }
+                    MainAppContent(viewModel = viewModel)
                 }
             }
         }

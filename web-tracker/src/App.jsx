@@ -172,8 +172,8 @@ export default function App() {
           <div style={{ padding: '1rem', background: '#0f172a', borderRadius: '0.75rem', marginBottom: '1.5rem', textAlign: 'left' }}>
             <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.25rem' }}>Need help with your order?</p>
             <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#f8fafc' }}>Chill Night Food Point</p>
-            <a href="tel:+923007654321" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', color: '#f97316', textDecoration: 'none', fontWeight: 600 }}>
-              <Phone size={16} /> Call +92 300 7654321
+            <a href="tel:03291314400" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', color: '#f97316', textDecoration: 'none', fontWeight: 600 }}>
+              <Phone size={16} /> Call 0329 1314400
             </a>
           </div>
           {token && (
@@ -222,7 +222,7 @@ export default function App() {
               <span style={{ fontSize: '1.4rem' }}>🍔</span>
               <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>Chill Night Food Point</h1>
             </div>
-            <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Order #{order.orderNumber} • {order.orderType}</p>
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Order {order.orderCode || ('CNFP-' + order.orderNumber)} • {order.orderType}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: isConnectedLive ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)', border: `1px solid ${isConnectedLive ? '#22c55e' : '#eab308'}`, padding: '0.3rem 0.6rem', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 600, color: isConnectedLive ? '#4ade80' : '#facc15' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isConnectedLive ? '#22c55e' : '#eab308', display: 'inline-block' }} />
@@ -420,7 +420,7 @@ export default function App() {
           <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>{order.restaurant?.name || 'Chill Night Food Point'}</h4>
           <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.75rem' }}>{order.restaurant?.address}</p>
           <a
-            href={`tel:${order.restaurant?.phone || '+923007654321'}`}
+            href={`tel:${order.restaurant?.phone ? order.restaurant.phone.replace(/[^0-9+]/g, '') : '03291314400'}`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',

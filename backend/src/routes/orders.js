@@ -1,6 +1,6 @@
 const express = require('express');
 const { randomUUID } = require('node:crypto');
-const { db, getNextOrderNumber } = require('../db');
+const { db, getNextOrderNumber, formatOrderNumber } = require('../db');
 const { authenticateOwner } = require('../auth');
 const { broadcastOrderUpdate } = require('../events');
 
@@ -8,18 +8,72 @@ const router = express.Router();
 
 const FRONTEND_TRACKING_BASE_URL = process.env.TRACKING_BASE_URL || 'http://localhost:5173/track';
 
+function getItemEmoji(name = '') {
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('burger') || lower.includes('patty') || lower.includes('bun') || lower.includes('zinger')) return '🍔';
+  if (lower.includes('fry') || lower.includes('fries') || lower.includes('potato')) return '🍟';
+  if (lower.includes('pizza') || lower.includes('slice') || lower.includes('calzone')) return '🍕';
+  if (lower.includes('shawarma') || lower.includes('wrap') || lower.includes('roll') || lower.includes('platter')) return '🌯';
+  if (lower.includes('shake') || lower.includes('ice cream') || lower.includes('dessert')) return '🍦';
+  if (lower.includes('drink') || lower.includes('pepsi') || lower.includes('soda') || lower.includes('coke') || lower.includes('7up') || lower.includes('margarita') || lower.includes('water')) return '🥤';
+  if (lower.includes('chicken') || lower.includes('wing') || lower.includes('nugget') || lower.includes('broast')) return '🍗';
+  return '🍔';
+}
+
 // Helper to format WhatsApp text
-function buildWhatsAppMessage(order, restaurantName = 'Chill Night Food Point') {
-  const trackingUrl = `${FRONTEND_TRACKING_BASE_URL}?token=${order.tracking_token}`;
+function buildWhatsAppMessage(order, items = [], req = null) {
+  let baseOrigin = process.env.TRACKING_BASE_URL || process.env.PUBLIC_APP_URL || process.env.APP_URL || '';
+  if (baseOrigin && !baseOrigin.startsWith('http')) {
+    baseOrigin = `https://${baseOrigin}`;
+  }
+  if (!baseOrigin && req) {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:4000';
+    baseOrigin = `${proto}://${host}`;
+  }
+  baseOrigin = (baseOrigin || 'http://localhost:4000').replace(/\/+$/, '');
+  const trackingUrl = `${baseOrigin}/track?token=${order.tracking_token}`;
+
+  const estimatedMins = order.order_type === 'DELIVERY'
+    ? (order.prep_time_minutes || 20) + (order.delivery_time_minutes || 15)
+    : (order.prep_time_minutes || 20);
+  const timeType = order.order_type === 'DELIVERY' ? 'delivery' : 'ready';
+
+  let itemsListText = '';
+  if (items && items.length > 0) {
+    itemsListText = items
+      .map((it) => {
+        let itemName = it.name;
+        if (it.notes && it.notes.trim()) {
+          const trimmedNote = it.notes.trim();
+          if (!itemName.toLowerCase().includes(trimmedNote.toLowerCase())) {
+            itemName = `${itemName} (${trimmedNote})`;
+          }
+        }
+        const emoji = getItemEmoji(it.name);
+        return `${emoji} ${itemName} × ${it.quantity} — Rs. ${Math.round(it.subtotal)}`;
+      })
+      .join('\n');
+  }
+
+  const deliveryFeeLine = (order.order_type === 'DELIVERY' && order.delivery_fee > 0)
+    ? `🛵 Delivery Fee: Rs. ${Math.round(order.delivery_fee)}\n`
+    : '';
+
+  const orderCode = formatOrderNumber(order.order_number);
+
   return (
-    `*Assalam-o-Alaikum ${order.customer_name}!* 🍔\n` +
-    `Thank you for ordering from *${restaurantName}*.\n\n` +
-    `📌 *Order #${order.order_number}* is *${order.status}*.\n` +
-    `💰 Total Bill: *Rs. ${Math.round(order.total_amount)}*\n` +
-    `💳 Payment: *${order.payment_status}* (${order.payment_method})\n\n` +
-    `⏱️ *Track your order live here:*\n` +
+    `Assalam-o-Alaikum! 🍔\n\n` +
+    `Aapka order confirm ho gaya hai.\n\n` +
+    `*Order #${orderCode}*\n\n` +
+    (itemsListText ? `${itemsListText}\n\n` : '') +
+    deliveryFeeLine +
+    `*Total: Rs. ${Math.round(order.total_amount)}*\n\n` +
+    `⏱️ Estimated ${timeType} time: ${estimatedMins} minutes\n\n` +
+    `📍 *LIVE ORDER TRACKING:*\n` +
+    `Tap the link below to track your order in real time:\n\n` +
     `${trackingUrl}\n\n` +
-    `_Chill Night Food Point — Fresh & Crispy!_`
+    `_Chill Night Food Point — 0329 1314400_`
   );
 }
 
@@ -66,7 +120,7 @@ router.get('/:id', authenticateOwner, (req, res) => {
   }
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(id);
-  const whatsappText = buildWhatsAppMessage(order);
+  const whatsappText = buildWhatsAppMessage(order, items, req);
   const cleanPhone = order.customer_phone.replace(/[^0-9+]/g, '');
   const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(whatsappText)}`;
 
@@ -255,7 +309,7 @@ router.post('/', authenticateOwner, (req, res) => {
   }
 
   const createdOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  const whatsappText = buildWhatsAppMessage(createdOrder);
+  const whatsappText = buildWhatsAppMessage(createdOrder, orderItemsSnapshots, req);
   const cleanPhone = createdOrder.customer_phone.replace(/[^0-9+]/g, '');
   const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(whatsappText)}`;
 

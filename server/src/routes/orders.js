@@ -1,11 +1,39 @@
 const express = require('express');
 const { randomUUID } = require('node:crypto');
-const { db, getNextOrderNumber } = require('../db');
+const { db, getNextOrderNumber, getSettings, formatOrderNumber, ORDER_PREFIX } = require('../db');
 const { broadcastOrderUpdate } = require('../events');
 
 const router = express.Router();
 
 const FRONTEND_TRACKING_BASE_URL = process.env.TRACKING_BASE_URL || '/track';
+
+// Determine public base origin for live customer tracking URL
+function getTrackingBaseOrigin(req = null) {
+  const settings = typeof getSettings === 'function' ? getSettings() : {};
+  let baseOrigin = process.env.TRACKING_BASE_URL || process.env.PUBLIC_APP_URL || process.env.APP_URL || (settings && settings.public_url) || '';
+  if (!baseOrigin && req) {
+    if (req.get('origin')) {
+      baseOrigin = req.get('origin');
+    } else if (req.get('referer')) {
+      try {
+        const refUrl = new URL(req.get('referer'));
+        baseOrigin = refUrl.origin;
+      } catch (e) {}
+    }
+    if (!baseOrigin) {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:4000';
+      baseOrigin = `${proto}://${host}`;
+    }
+  }
+  if (!baseOrigin) {
+    baseOrigin = 'http://localhost:4000';
+  }
+  if (!baseOrigin.startsWith('http://') && !baseOrigin.startsWith('https://')) {
+    baseOrigin = `https://${baseOrigin}`;
+  }
+  return baseOrigin.replace(/\/+$/, '');
+}
 
 // Normalize Pakistani phone number (e.g. "03001234567" -> "923001234567")
 function formatPhoneForWhatsApp(phone) {
@@ -20,18 +48,68 @@ function formatPhoneForWhatsApp(phone) {
   return digits;
 }
 
-// Build prefilled WhatsApp message
-function buildWhatsAppMessage(order) {
-  const trackingUrl = `${FRONTEND_TRACKING_BASE_URL}?token=${order.tracking_token}`;
+function getItemEmoji(name = '') {
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('burger') || lower.includes('patty') || lower.includes('bun') || lower.includes('zinger')) return '🍔';
+  if (lower.includes('fry') || lower.includes('fries') || lower.includes('potato')) return '🍟';
+  if (lower.includes('pizza') || lower.includes('slice') || lower.includes('calzone')) return '🍕';
+  if (lower.includes('shawarma') || lower.includes('wrap') || lower.includes('roll') || lower.includes('platter')) return '🌯';
+  if (lower.includes('shake') || lower.includes('ice cream') || lower.includes('dessert')) return '🍦';
+  if (lower.includes('drink') || lower.includes('pepsi') || lower.includes('soda') || lower.includes('coke') || lower.includes('7up') || lower.includes('margarita') || lower.includes('water')) return '🥤';
+  if (lower.includes('chicken') || lower.includes('wing') || lower.includes('nugget') || lower.includes('broast')) return '🍗';
+  return '🍔';
+}
+
+// Build prefilled WhatsApp message matching the customer preview card format
+function buildWhatsAppMessage(order, items = [], req = null) {
+  const baseOrigin = getTrackingBaseOrigin(req);
+  const trackingUrl = `${baseOrigin}/track?token=${order.tracking_token}`;
+  const orderCode = formatOrderNumber(order.order_number);
+
+  // Format estimated minutes
+  const estimatedMins = order.order_type === 'DELIVERY'
+    ? (order.prep_time_minutes || 20) + (order.delivery_time_minutes || 15)
+    : (order.prep_time_minutes || 20);
+  const timeType = order.order_type === 'DELIVERY' ? 'delivery' : 'ready';
+
+  // Format items list with emojis: 🍔 Zinger Burger × 2 — Rs. 700
+  let itemsListText = '';
+  if (items && items.length > 0) {
+    itemsListText = items
+      .map((it) => {
+        let itemName = it.name;
+        if (it.notes && it.notes.trim()) {
+          const trimmedNote = it.notes.trim();
+          if (!itemName.toLowerCase().includes(trimmedNote.toLowerCase())) {
+            itemName = `${itemName} (${trimmedNote})`;
+          }
+        }
+        const emoji = getItemEmoji(it.name);
+        return `${emoji} ${itemName} × ${it.quantity} — Rs. ${Math.round(it.subtotal)}`;
+      })
+      .join('\n');
+  }
+
+  const deliveryFeeLine = (order.order_type === 'DELIVERY' && order.delivery_fee > 0)
+    ? `🛵 Delivery Fee: Rs. ${Math.round(order.delivery_fee)}\n`
+    : '';
+
+  const settings = typeof getSettings === 'function' ? getSettings() : {};
+  const shopName = settings.shop_name || 'Chill Night Food Point';
+  const shopPhone = settings.shop_phone || '0329 1314400';
+
   return (
-    `*Assalam-o-Alaikum ${order.customer_name}!* 🍔\n` +
-    `Thank you for ordering from *Chill Night Food Point*.\n\n` +
-    `📌 *Order #${order.order_number}* is *${order.status}*.\n` +
-    `💰 Total Bill: *Rs. ${Math.round(order.total_amount)}*\n` +
-    `💳 Payment: *${order.payment_status}* (${order.payment_method})\n\n` +
-    `⏱️ *Track your order live here:*\n` +
+    `Assalam-o-Alaikum! 🍔\n\n` +
+    `Aapka order confirm ho gaya hai.\n\n` +
+    `*Order #${orderCode}*\n\n` +
+    (itemsListText ? `${itemsListText}\n\n` : '') +
+    deliveryFeeLine +
+    `*Total: Rs. ${Math.round(order.total_amount)}*\n\n` +
+    `⏱️ Estimated ${timeType} time: ${estimatedMins} minutes\n\n` +
+    `📍 *LIVE ORDER TRACKING:*\n` +
+    `Tap the link below to track your order in real time:\n\n` +
     `${trackingUrl}\n\n` +
-    `_Chill Night Food Point — Fresh, Hot & Crispy!_`
+    `_${shopName} — ${shopPhone}_`
   );
 }
 
@@ -67,7 +145,12 @@ router.get('/', (req, res) => {
     params.push(Number(limit), Number(offset));
 
     const orders = db.prepare(query).all(...params);
-    res.json(orders);
+    const enrichedOrders = orders.map((o) => ({
+      ...o,
+      order_code: formatOrderNumber(o.order_number),
+      order_number_formatted: formatOrderNumber(o.order_number),
+    }));
+    res.json(enrichedOrders);
   } catch (err) {
     console.error('Error fetching orders:', err);
     res.status(500).json({ error: 'Failed to fetch orders' });
@@ -86,12 +169,14 @@ router.get('/:id', (req, res) => {
     const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(id);
     const history = db.prepare('SELECT * FROM order_status_history WHERE order_id = ? ORDER BY timestamp ASC').all(id);
 
-    const whatsappText = buildWhatsAppMessage(order);
+    const whatsappText = buildWhatsAppMessage(order, items, req);
     const waPhone = formatPhoneForWhatsApp(order.customer_phone);
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(whatsappText)}`;
 
     res.json({
       ...order,
+      order_code: formatOrderNumber(order.order_number),
+      order_number_formatted: formatOrderNumber(order.order_number),
       items,
       history,
       trackingUrl: `${FRONTEND_TRACKING_BASE_URL}?token=${order.tracking_token}`,
@@ -274,12 +359,14 @@ router.post('/', (req, res) => {
     db.exec('COMMIT;');
 
     const createdOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-    const whatsappText = buildWhatsAppMessage(createdOrder);
+    const whatsappText = buildWhatsAppMessage(createdOrder, orderItemsSnapshots, req);
     const waPhone = formatPhoneForWhatsApp(createdOrder.customer_phone);
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(whatsappText)}`;
 
     res.status(201).json({
       ...createdOrder,
+      order_code: formatOrderNumber(createdOrder.order_number),
+      order_number_formatted: formatOrderNumber(createdOrder.order_number),
       items: orderItemsSnapshots,
       trackingUrl: `${FRONTEND_TRACKING_BASE_URL}?token=${trackingToken}`,
       whatsappText,
@@ -295,47 +382,87 @@ router.post('/', (req, res) => {
 // PATCH status change
 router.patch('/:id/status', (req, res) => {
   const { id } = req.params;
-  const { status, cancellationReason, note = '' } = req.body;
+  const {
+    status,
+    cancellationReason,
+    note = '',
+    prepTimeMinutes,
+    deliveryTimeMinutes,
+    estimatedReadyAt,
+    estimatedDeliveryAt,
+  } = req.body;
 
   const validStatuses = ['CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
-  if (!status || !validStatuses.includes(status.toUpperCase())) {
+  if (status && !validStatuses.includes(status.toUpperCase())) {
     return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
   }
 
-  const normStatus = status.toUpperCase();
   const existing = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!existing) {
     return res.status(404).json({ error: 'Order not found' });
   }
 
+  const normStatus = status ? status.toUpperCase() : existing.status;
   const now = new Date().toISOString();
   const completedAt = (normStatus === 'DELIVERED' || normStatus === 'CANCELLED') ? now : existing.completed_at;
+
+  // Calculate new deadlines if provided
+  let newReadyAt = existing.estimated_ready_at;
+  let newDeliveryAt = existing.estimated_delivery_at;
+  let newPrepMins = existing.prep_time_minutes;
+  let newDelMins = existing.delivery_time_minutes;
+
+  if (prepTimeMinutes !== undefined) {
+    newPrepMins = Math.max(5, Number(prepTimeMinutes));
+    newReadyAt = new Date(Date.now() + newPrepMins * 60 * 1000).toISOString();
+  }
+  if (deliveryTimeMinutes !== undefined) {
+    newDelMins = Math.max(5, Number(deliveryTimeMinutes));
+    if (existing.order_type === 'DELIVERY') {
+      newDeliveryAt = new Date(Date.now() + (newPrepMins + newDelMins) * 60 * 1000).toISOString();
+    }
+  }
+  if (estimatedReadyAt) newReadyAt = estimatedReadyAt;
+  if (estimatedDeliveryAt) newDeliveryAt = estimatedDeliveryAt;
 
   try {
     db.exec('BEGIN TRANSACTION;');
 
     db.prepare(`
       UPDATE orders
-      SET status = ?, cancellation_reason = ?, completed_at = ?, updated_at = ?
+      SET status = ?,
+          cancellation_reason = ?,
+          prep_time_minutes = ?,
+          delivery_time_minutes = ?,
+          estimated_ready_at = ?,
+          estimated_delivery_at = ?,
+          completed_at = ?,
+          updated_at = ?
       WHERE id = ?
     `).run(
       normStatus,
-      cancellationReason ? cancellationReason.trim() : existing.cancellation_reason,
+      cancellationReason !== undefined ? cancellationReason.trim() : existing.cancellation_reason,
+      newPrepMins,
+      newDelMins,
+      newReadyAt,
+      newDeliveryAt,
       completedAt,
       now,
       id
     );
 
-    db.prepare(`
-      INSERT INTO order_status_history (id, order_id, status, note, timestamp)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      'osh_' + randomUUID().substring(0, 8),
-      id,
-      normStatus,
-      note ? note.trim() : `Status changed to ${normStatus}`,
-      now
-    );
+    if (normStatus !== existing.status || note) {
+      db.prepare(`
+        INSERT INTO order_status_history (id, order_id, status, note, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        'osh_' + randomUUID().substring(0, 8),
+        id,
+        normStatus,
+        note ? note.trim() : `Status changed to ${normStatus}`,
+        now
+      );
+    }
 
     db.exec('COMMIT;');
 
@@ -347,6 +474,8 @@ router.patch('/:id/status', (req, res) => {
       status: updated.status,
       completedAt: updated.completed_at,
       cancellationReason: updated.cancellation_reason,
+      estimatedReadyAt: updated.estimated_ready_at,
+      estimatedDeliveryAt: updated.estimated_delivery_at,
     });
 
     res.json(updated);

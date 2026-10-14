@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Search,
-  Phone,
   MapPin,
-  Clock,
   ArrowRight,
   ExternalLink,
   Send,
@@ -13,9 +11,10 @@ import {
   CheckCircle2,
   RefreshCw,
 } from 'lucide-react';
-import { Order, OrderStatus, PaymentMethod } from '../../types';
+import { Order, OrderStatus, PaymentMethod, formatOrderNumber } from '../../types';
 import { OrderStatusBadge, PaymentStatusBadge } from '../common/StatusBadge';
 import * as api from '../../services/api';
+import { WhatsAppMessagePreview } from './WhatsAppMessagePreview';
 
 interface OrdersViewProps {
   orders: Order[];
@@ -40,6 +39,20 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [cancelReason, setCancelReason] = useState('');
   const [paymentPaidInput, setPaymentPaidInput] = useState('');
   const [paymentMethodInput, setPaymentMethodInput] = useState<PaymentMethod>('CASH');
+  const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(false);
+
+  // Ensure full order details (items, whatsappUrl, calculated live deadlines) are loaded
+  React.useEffect(() => {
+    if (selectedOrder?.id && (!selectedOrder.items || !selectedOrder.whatsappUrl)) {
+      api.getOrderById(selectedOrder.id)
+        .then((fullOrder) => {
+          onSelectOrder(fullOrder);
+        })
+        .catch((err) => {
+          console.error('Failed to load full order details:', err);
+        });
+    }
+  }, [selectedOrder?.id]);
 
   // Filtered orders
   const filteredOrders = useMemo(() => {
@@ -50,7 +63,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         !term ||
         order.customer_name.toLowerCase().includes(term) ||
         order.customer_phone.includes(term) ||
-        String(order.order_number).includes(term);
+        String(order.order_number).includes(term) ||
+        formatOrderNumber(order.order_number).toLowerCase().includes(term);
       return matchesStatus && matchesSearch;
     });
   }, [orders, selectedStatus, searchQuery]);
@@ -188,47 +202,40 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             <div
               key={order.id}
               onClick={() => onSelectOrder(order)}
-              className="group cursor-pointer bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition shadow-sm space-y-3"
+              className="group cursor-pointer bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl p-3.5 transition shadow-sm space-y-2.5"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center font-mono font-bold text-sm text-orange-400 shrink-0">
-                    <span className="text-[9px] text-slate-500">ORD</span>
-                    <span>{order.order_number}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-12 h-10 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center font-mono font-bold text-xs text-orange-400 shrink-0">
+                    <span className="text-[7px] text-slate-500 leading-none">CNFP</span>
+                    <span className="leading-tight text-xs font-black">{order.order_number}</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-extrabold text-sm text-white group-hover:text-orange-400 transition">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-extrabold text-xs text-white group-hover:text-orange-400 transition truncate">
                         {order.customer_name}
                       </h4>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold">
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-bold shrink-0">
                         {order.order_type}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-slate-500" /> {order.customer_phone}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-500" />{' '}
-                        {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 truncate">
+                      <span>{order.customer_phone}</span>
+                      <span>•</span>
+                      <span>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <p className="font-black text-sm text-white font-mono">
+                <div className="text-right shrink-0">
+                  <p className="font-black text-xs text-orange-400 font-mono">
                     Rs. {Math.round(order.total_amount).toLocaleString()}
                   </p>
-                  <div className="mt-1 flex items-center justify-end gap-1">
-                    <PaymentStatusBadge status={order.payment_status} />
-                  </div>
                 </div>
               </div>
 
               {order.delivery_address && (
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-950/60 px-2.5 py-1.5 rounded-xl border border-slate-800/60 truncate">
+                <div className="flex items-center gap-1 text-[10px] text-slate-400 bg-slate-950/60 px-2 py-1 rounded-lg border border-slate-800/60 truncate">
                   <MapPin className="w-3 h-3 text-orange-400 shrink-0" />
                   <span className="truncate">{order.delivery_address}</span>
                 </div>
@@ -236,10 +243,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
               <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                 <OrderStatusBadge status={order.status} />
-                <span className="text-xs font-bold text-orange-400 group-hover:translate-x-1 transition flex items-center gap-1">
-                  <span>Manage</span>
-                  <ArrowRight className="w-3 h-3" />
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <PaymentStatusBadge status={order.payment_status} />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-orange-400 group-hover:translate-x-0.5 transition" />
+                </div>
               </div>
             </div>
           ))}
@@ -258,7 +265,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-400 font-mono font-bold text-xs">
-                    #{selectedOrder.order_number}
+                    {formatOrderNumber(selectedOrder.order_number)}
                   </span>
                   <h3 className="font-black text-lg text-white">{selectedOrder.customer_name}</h3>
                 </div>
@@ -409,6 +416,29 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               )}
             </div>
 
+            {/* WhatsApp Message Preview Section */}
+            <div className="pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppPreview(prev => !prev)}
+                className="w-full py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold rounded-xl text-xs flex items-center justify-between transition border border-emerald-500/25"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{showWhatsAppPreview ? 'Hide WhatsApp Message Preview' : 'View Customer WhatsApp Message Preview'}</span>
+                </div>
+                <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded font-mono">
+                  {showWhatsAppPreview ? '▲ Hide' : '▼ View'}
+                </span>
+              </button>
+
+              {showWhatsAppPreview && (
+                <div className="mt-2.5 animate-in fade-in duration-200">
+                  <WhatsAppMessagePreview order={selectedOrder} items={selectedOrder.items} />
+                </div>
+              )}
+            </div>
+
             {/* Action Bar (WhatsApp & Live Tracker) */}
             <div className="space-y-2 pt-2">
               {selectedOrder.whatsappUrl && (
@@ -508,7 +538,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-t-[2rem] sm:rounded-3xl p-5 max-w-sm w-full space-y-4 animate-in slide-in-from-bottom duration-200 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-5">
             <div className="sm:hidden w-10 h-1 bg-slate-700 rounded-full mx-auto -mt-1 mb-2" />
-            <h4 className="font-black text-rose-400 text-base">Cancel Order #{selectedOrder.order_number}</h4>
+            <h4 className="font-black text-rose-400 text-base">Cancel Order {formatOrderNumber(selectedOrder.order_number)}</h4>
             <p className="text-xs text-slate-400">
               Are you sure you want to cancel this order? This will notify the customer on their live tracking link.
             </p>

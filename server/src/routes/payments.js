@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, formatOrderNumber } = require('../db');
 
 const router = express.Router();
 
@@ -43,7 +43,11 @@ router.get('/stats', (req, res) => {
       paidOrdersCount: totals.paid_orders_count,
       pendingOrdersCount: totals.pending_orders_count,
       methodsBreakdown: methods,
-      pendingOrders: recentPending,
+      pendingOrders: recentPending.map(o => ({
+        ...o,
+        order_code: formatOrderNumber(o.order_number),
+        order_number_formatted: formatOrderNumber(o.order_number),
+      })),
     });
   } catch (err) {
     console.error('Error in payments stats:', err);

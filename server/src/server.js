@@ -10,6 +10,7 @@ const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/orders');
 const paymentsRoutes = require('./routes/payments');
 const trackingRoutes = require('./routes/tracking');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -49,6 +50,7 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/track', trackingRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Static hosting for production-built client
 const clientDistPath = path.join(__dirname, '..', '..', 'client', 'dist');

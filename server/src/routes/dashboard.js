@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, formatOrderNumber } = require('../db');
 
 const router = express.Router();
 
@@ -74,7 +74,11 @@ router.get('/stats', (req, res) => {
       cancelledOrdersCount: cancelledOrders.count,
       todaySalesTotal: Math.round(todayOrders.total_sales),
       statusBreakdown: statusCounts,
-      recentOrders,
+      recentOrders: recentOrders.map(o => ({
+        ...o,
+        order_code: formatOrderNumber(o.order_number),
+        order_number_formatted: formatOrderNumber(o.order_number),
+      })),
     });
   } catch (err) {
     console.error('Error fetching dashboard stats:', err);

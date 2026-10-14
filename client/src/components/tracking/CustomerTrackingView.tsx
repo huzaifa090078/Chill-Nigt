@@ -12,7 +12,7 @@ import {
   RefreshCw,
   XCircle,
 } from 'lucide-react';
-import { CustomerTrackingResponse, OrderStatus } from '../../types';
+import { CustomerTrackingResponse, OrderStatus, formatOrderNumber } from '../../types';
 import * as api from '../../services/api';
 
 interface CustomerTrackingViewProps {
@@ -64,6 +64,11 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({ toke
                   status: payload.status,
                   completedAt: payload.completedAt,
                   cancellationReason: payload.cancellationReason,
+                  estimatedReadyAt: payload.estimatedReadyAt || prev.estimatedReadyAt,
+                  estimatedDeliveryAt:
+                    payload.estimatedDeliveryAt !== undefined
+                      ? payload.estimatedDeliveryAt
+                      : prev.estimatedDeliveryAt,
                 }
               : prev
           );
@@ -192,13 +197,24 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({ toke
             <span className="text-xl">🍔</span>
             <div>
               <h1 className="text-sm font-black text-white">Chill Night Food Point</h1>
-              <p className="text-[10px] text-slate-400">Order #{data.orderNumber} • {data.orderType}</p>
+              <p className="text-[10px] text-slate-400">Order {data.orderCode || formatOrderNumber(data.orderNumber)} • {data.orderType}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            {isConnectedLive ? 'Live Sync' : 'Connecting'}
+          <div className="flex items-center gap-2">
+            <a
+              href={`tel:${data.restaurant?.phoneDial || (data.restaurant?.phone ? data.restaurant.phone.replace(/[^0-9+]/g, '') : '03291314400')}`}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 shadow-md shadow-emerald-500/20 transition"
+              title={`Call Shop (${data.restaurant?.phone || '0329 1314400'})`}
+            >
+              <Phone className="w-3 h-3 fill-slate-950" />
+              <span>Call Shop</span>
+            </a>
+
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              {isConnectedLive ? 'Live Sync' : 'Connecting'}
+            </div>
           </div>
         </div>
       </header>
@@ -356,14 +372,17 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({ toke
         )}
 
         {/* Restaurant Contact Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-2">
-          <p className="text-xs text-slate-400">Need help or special instructions?</p>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-3">
+          <div>
+            <p className="text-xs text-slate-400">Need help, order update or special instructions?</p>
+            <p className="text-xs font-bold text-white mt-0.5">Chill Night Food Point Official Hotline</p>
+          </div>
           <a
-            href={`tel:${data.restaurant.phone}`}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition"
+            href={`tel:${data.restaurant?.phoneDial || (data.restaurant?.phone ? data.restaurant.phone.replace(/[^0-9+]/g, '') : '03291314400')}`}
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition"
           >
-            <Phone className="w-4 h-4 text-emerald-400" />
-            <span>Call Restaurant ({data.restaurant.phone})</span>
+            <Phone className="w-4 h-4 fill-slate-950" />
+            <span>Call Restaurant ({data.restaurant?.phone || '0329 1314400'})</span>
           </a>
         </div>
       </main>

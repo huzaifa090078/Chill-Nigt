@@ -3,12 +3,39 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-page: #050811;
+    --bg-shell: #090d16;
+    --bg-header: #0d1322;
+    --bg-card: #0f172a;
+    --bg-input: #020617;
+    --border-color: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #f97316;
+  }
+
+  html.light {
+    --bg-page: #e2e8f0;
+    --bg-shell: #f8fafc;
+    --bg-header: #ffffff;
+    --bg-card: #ffffff;
+    --bg-input: #f1f5f9;
+    --border-color: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --accent: #ea580c;
+  }
+
   html, body {
-    @apply bg-slate-950 text-slate-100 min-h-screen;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100%;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
-    touch-action: manipulation;
-    overscroll-behavior-y: contain;
+    overflow-y: auto;
   }
 
   /* Prevent text selection during fast tapping on buttons and tabs */
@@ -26,6 +53,93 @@
       font-size: 0.875rem;
     }
   }
+}
+
+/* Light mode overrides for Tailwind utility colors */
+html.light .bg-slate-950,
+html.light [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+}
+html.light .bg-slate-900,
+html.light [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+}
+html.light .bg-slate-850,
+html.light [class*="bg-slate-850"] {
+  background-color: #f1f5f9 !important;
+}
+html.light .bg-slate-800,
+html.light [class*="bg-slate-800"] {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .border-slate-850,
+html.light [class*="border-slate-850"],
+html.light .border-slate-800,
+html.light [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
+}
+html.light .border-slate-700,
+html.light [class*="border-slate-700"] {
+  border-color: #cbd5e1 !important;
+}
+html.light .html-light-bg {
+  background-color: #e2e8f0 !important;
+}
+
+/* High-contrast text colors in light mode */
+html.light .text-white,
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #0f172a !important;
+}
+html.light .text-slate-300,
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+html.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Preserve crisp white text and icon fills on colored buttons and badges */
+html.light .keep-white,
+html.light [class*="from-orange-"] .text-white,
+html.light [class*="from-orange-"] svg,
+html.light .fill-white {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+}
+html.light .text-slate-950 {
+  color: #020617 !important;
+}
+
+/* Inputs high contrast in light mode */
+html.light input,
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.light .from-slate-900 {
+  --tw-gradient-from: #ffffff var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+html.light .via-slate-900 {
+  --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), #ffffff var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+html.light .to-slate-800 {
+  --tw-gradient-to: #f1f5f9 var(--tw-gradient-to-position) !important;
+}
+html.light .to-slate-950 {
+  --tw-gradient-to: #e2e8f0 var(--tw-gradient-to-position) !important;
 }
 
 /* Custom sleek scrollbar */

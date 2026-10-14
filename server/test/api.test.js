@@ -190,12 +190,15 @@ describe('🍔 Chill Night Food Point — Backend Test Suite', () => {
     const tracking = await trackRes.json();
 
     assert.equal(tracking.orderNumber, testOrder.order_number);
+    assert.equal(tracking.orderCode, `CNFP-${testOrder.order_number}`);
     assert.equal(tracking.customerName, 'Hamza Tariq');
     // Masked phone format (e.g. "0312 ••••• 89")
     assert.ok(tracking.customerPhoneMasked.includes('•••••'));
     assert.equal(tracking.status, 'DELIVERED');
     assert.equal(tracking.totalAmount, 1590);
     assert.equal(tracking.restaurant.name, 'Chill Night Food Point');
+    assert.equal(tracking.restaurant.phone, '0329 1314400');
+    assert.equal(tracking.restaurant.phoneDial, '03291314400');
   });
 
   test('8. Dashboard Metrics: Calculates sales and completed orders from real data', async () => {
@@ -218,5 +221,171 @@ describe('🍔 Chill Night Food Point — Backend Test Suite', () => {
     assert.ok(stats.grandTotalSales >= 1590);
     assert.ok(stats.totalCollected >= 1590);
     assert.ok(stats.paidOrdersCount >= 1);
+  });
+
+  test('10. WhatsApp Message & Security: Validates items, total, ETA and tracking URL isolation', async () => {
+    const listRes = await fetch(`${baseUrl}/api/orders`);
+    const orders = await listRes.json();
+    const testOrder = orders.find(o => o.customer_name === 'Hamza Tariq');
+
+    const detailRes = await fetch(`${baseUrl}/api/orders/${testOrder.id}`);
+    assert.equal(detailRes.status, 200);
+    const detail = await detailRes.json();
+
+    // Verify WhatsApp message content contains restaurant name, order number, items, total, and tracking link
+    assert.ok(detail.whatsappText.includes('Chill Night Food Point'));
+    assert.ok(detail.whatsappText.includes('Assalam-o-Alaikum! 🍔'));
+    assert.ok(detail.whatsappText.includes('Aapka order confirm ho gaya hai.'));
+    assert.ok(detail.whatsappText.includes(`*Order #CNFP-${testOrder.order_number}*`));
+    assert.ok(detail.whatsappText.includes('🍔 Chill Zinger Burger (Extra spicy) × 2 — Rs. 1160'));
+    assert.ok(detail.whatsappText.includes('🛵 Delivery Fee: Rs. 150'));
+    assert.ok(detail.whatsappText.includes('*Total: Rs. 1590*'));
+    assert.ok(detail.whatsappText.includes('⏱️ Estimated delivery time: '));
+    assert.ok(detail.whatsappText.includes('📍 *LIVE ORDER TRACKING:*\nTap the link below to track your order in real time:\n\n'));
+    assert.ok(detail.whatsappText.includes(`token=${testOrder.tracking_token}`));
+    assert.ok(detail.whatsappText.includes('_Chill Night Food Point — 0329 1314400_'));
+    assert.ok(detail.whatsappUrl.startsWith('https://api.whatsapp.com/send?phone=923123456789&text='));
+
+    // Verify WhatsApp URL decoded text exactly matches detail.whatsappText
+    const urlObj = new URL(detail.whatsappUrl);
+    assert.equal(urlObj.searchParams.get('phone'), '923123456789');
+    assert.equal(urlObj.searchParams.get('text'), detail.whatsappText);
+
+    // Security check: Invalid token must return 400 or 404, never sensitive data
+    const invalidTokenRes = await fetch(`${baseUrl}/api/track/invalid-token-without-prefix`);
+    assert.equal(invalidTokenRes.status, 400);
+
+    const nonExistentTokenRes = await fetch(`${baseUrl}/api/track/trk_nonexistent1234567890`);
+    assert.equal(nonExistentTokenRes.status, 404);
+  });
+
+  test('11. WhatsApp Message Formatting: Validates Takeaway order, variants, PAID status, and exact structure', async () => {
+    // Create a Takeaway order with pizza variant and paid status
+    const takeawayPayload = {
+      customerName: 'Ayesha Khan',
+      customerPhone: '03009876543',
+      orderType: 'TAKEAWAY',
+      items: [
+        { menuItemId: 'item_7', quantity: 1, notes: 'Crispy thin crust' }
+      ],
+      prepTimeMinutes: 20,
+      paymentMethod: 'ONLINE',
+      amountPaid: 1250, // Full price of Fajita Passion Pizza (Medium 10")
+      notes: 'Customer will pick up at counter'
+    };
+
+    const res = await fetch(`${baseUrl}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(takeawayPayload)
+    });
+    assert.equal(res.status, 201);
+    const order = await res.json();
+
+    assert.equal(order.customer_name, 'Ayesha Khan');
+    assert.equal(order.order_type, 'TAKEAWAY');
+    assert.equal(order.payment_status, 'PAID');
+    assert.equal(order.order_code, `CNFP-${order.order_number}`);
+
+    // Verify WhatsApp text
+    const text = order.whatsappText;
+    assert.ok(text.startsWith('Assalam-o-Alaikum! 🍔\n\nAapka order confirm ho gaya hai.\n\n*Order #CNFP-'));
+    assert.ok(text.includes('🍕 Fajita Passion Pizza (Medium 10") (Crispy thin crust) × 1 — Rs. 1250'));
+    // Delivery fee line should NOT be present for takeaway
+    assert.ok(!text.includes('🛵 Delivery Fee:'));
+    assert.ok(text.includes('*Total: Rs. 1250*'));
+    assert.ok(text.includes('⏱️ Estimated ready time: 20 minutes'));
+    assert.ok(text.includes('📍 *LIVE ORDER TRACKING:*\nTap the link below to track your order in real time:\n\n'));
+    assert.ok(text.includes(`token=${order.tracking_token}`));
+    assert.ok(text.endsWith('_Chill Night Food Point — 0329 1314400_'));
+
+    // Verify WhatsApp URL
+    assert.ok(order.whatsappUrl.startsWith('https://api.whatsapp.com/send?phone=923009876543&text='));
+    const urlObj = new URL(order.whatsappUrl);
+    assert.equal(urlObj.searchParams.get('phone'), '923009876543');
+    assert.equal(urlObj.searchParams.get('text'), text);
+  });
+
+  test('12. Settings, Backup & Danger Zone: Profile update, export/import and safe reset', async () => {
+    // 1. Get current settings
+    const getRes = await fetch(`${baseUrl}/api/settings`);
+    assert.equal(getRes.status, 200);
+    const settings = await getRes.json();
+    assert.ok(settings.shop_name);
+    assert.ok(settings.shop_phone);
+
+    // 2. Update settings
+    const putRes = await fetch(`${baseUrl}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shop_name: 'Chill Night Food Point (Main Branch)',
+        shop_phone: '0329 1314400',
+        alt_phone: '0300 1234567',
+        default_delivery_fee: 120,
+        default_order_type: 'DELIVERY'
+      })
+    });
+    assert.equal(putRes.status, 200);
+    const updated = await putRes.json();
+    assert.equal(updated.shop_name, 'Chill Night Food Point (Main Branch)');
+    assert.equal(updated.alt_phone, '0300 1234567');
+    assert.equal(updated.default_delivery_fee, '120');
+
+    // 3. Export backup
+    const exportRes = await fetch(`${baseUrl}/api/settings/backup/export`);
+    assert.equal(exportRes.status, 200);
+    const backup = await exportRes.json();
+    assert.equal(backup.appName, 'Chill Night Food Point');
+    assert.equal(backup.version, '1.0');
+    assert.ok(Array.isArray(backup.data.categories));
+    assert.ok(Array.isArray(backup.data.menuItems));
+    assert.ok(Array.isArray(backup.data.orders));
+    assert.ok(backup.data.orders.length > 0);
+
+    // 4. Reset orders only
+    const resetOrdersRes = await fetch(`${baseUrl}/api/settings/reset/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: true })
+    });
+    assert.equal(resetOrdersRes.status, 200);
+    const listAfterReset = await (await fetch(`${baseUrl}/api/orders`)).json();
+    assert.equal(listAfterReset.length, 0);
+
+    // 5. Restore backup
+    const importRes = await fetch(`${baseUrl}/api/settings/backup/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backup)
+    });
+    assert.equal(importRes.status, 200);
+    const importData = await importRes.json();
+    assert.equal(importData.success, true);
+
+    const listAfterRestore = await (await fetch(`${baseUrl}/api/orders`)).json();
+    assert.equal(listAfterRestore.length, backup.data.orders.length);
+
+    // 6. Reset all - guard with confirmationText
+    const badResetRes = await fetch(`${baseUrl}/api/settings/reset/all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmationText: 'WRONG' })
+    });
+    assert.equal(badResetRes.status, 400);
+
+    // Successful reset all with 'RESET'
+    const goodResetRes = await fetch(`${baseUrl}/api/settings/reset/all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmationText: 'RESET' })
+    });
+    assert.equal(goodResetRes.status, 200);
+
+    const ordersFinal = await (await fetch(`${baseUrl}/api/orders`)).json();
+    assert.equal(ordersFinal.length, 0);
+
+    const categoriesFinal = await (await fetch(`${baseUrl}/api/menu/categories`)).json();
+    assert.ok(categoriesFinal.length > 0); // Seeded default menu
   });
 });

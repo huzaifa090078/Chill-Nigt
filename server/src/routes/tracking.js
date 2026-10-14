@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, getSettings, formatOrderNumber } = require('../db');
 const { addTrackingClient } = require('../events');
 
 const router = express.Router();
@@ -39,8 +39,14 @@ router.get('/:token', (req, res) => {
       ORDER BY timestamp ASC
     `).all(order.id);
 
+    const settings = getSettings();
+    const shopPhone = settings.shop_phone || process.env.RESTAURANT_PHONE || '0329 1314400';
+    const cleanPhone = shopPhone.replace(/[^0-9+]/g, '');
+
     res.json({
       orderNumber: order.order_number,
+      orderCode: formatOrderNumber(order.order_number),
+      orderNumberFormatted: formatOrderNumber(order.order_number),
       trackingToken: order.tracking_token,
       customerName: order.customer_name,
       customerPhoneMasked: maskPhoneNumber(order.customer_phone),
@@ -65,9 +71,13 @@ router.get('/:token', (req, res) => {
       amountPaid: order.amount_paid,
       remainingAmount: order.remaining_amount,
       restaurant: {
-        name: 'Chill Night Food Point',
-        phone: '+92 300 7654321',
-        address: 'Food Street, Sector F-10, Islamabad',
+        name: settings.shop_name || 'Chill Night Food Point',
+        phone: shopPhone,
+        phoneFormatted: shopPhone,
+        phoneDial: cleanPhone,
+        address: settings.address || 'Food Street, Sector F-10, Islamabad',
+        city: settings.city || 'Islamabad',
+        currency: settings.currency || 'PKR (Rs.)',
       },
     });
   } catch (err) {
